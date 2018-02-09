@@ -94,6 +94,7 @@ void drive( bool isTank );
 void moveArm(bool up, bool down, bool autoHoldHeight, int currentSpeed);
 void rollRoller( bool up, bool down );
 void moveGoal( bool up, bool down );
+void holdArm(int overrideAngle, int currentSpeed);
 
 //task declarations
 task autoPickupGoal();
@@ -106,6 +107,11 @@ int ARM_CURRENT_ANGLE;
 int holdAngle;
 bool autoIsRunning;
 bool autoLiftRunning;
+
+bool armDownDecreased;
+bool armUpDecreased;
+bool armDownFound;
+bool armUpFound;
 
 //globals for PID
 int armUpPower;
@@ -120,7 +126,8 @@ const int LIFT_UP_BTN = Btn6U,
 				  GOAL_DOWN_BTN = Btn8R,
 				  AUTO_LIFT_MOBILE = Btn5U,
 				  AUTO_LIFT_FIXED = Btn5D,
-				  AUTO_HOLD_HEIGHT = Btn7D;
+				  AUTO_HOLD_HEIGHT_ON = Btn7D,
+				  AUTO_HOLD_HEIGHT_OFF = Btn7R;
 
 task usercontrol()
 {
@@ -138,6 +145,10 @@ task usercontrol()
 
 	autoIsRunning = false;
 	autoLiftRunning = false;
+	armDownDecreased = false;
+	armUpDecreased = false;
+	armDownFound = false;
+	armUpFound = false;
 
 	//clears timer2
 	clearTimer(T2);
@@ -178,14 +189,20 @@ task usercontrol()
   		startTask(autoDropFixed);
   	}
 
+  	//turns on and off auto hold height
+  	if(vexRT[AUTO_HOLD_HEIGHT_ON])
+  	{
+  			autoHoldHeight = true;
+  	}
+  	if(vexRT[AUTO_HOLD_HEIGHT_OFF])
+  	{
+  			autoHoldHeight = false;
+  	}
+
   	//run every second
   	if(time1[T2] - oneSecPoll > 1000)
   	{
   		oneSecPoll = time1[T2];
-  		if(vexRT[AUTO_HOLD_HEIGHT])
-  		{
-  			autoHoldHeight = !autoHoldHeight;
-  		}
   	}
 
   	//run every 10ms
@@ -286,6 +303,58 @@ void drive( bool isTank ) {
   }
 }
 
+void holdArm(int overrideAngle, int currentSpeed)
+{
+	if(overrideAngle != 0)
+	{
+		holdAngle = overrideAngle;
+	}
+	if (SensorValue[armAngle] > holdAngle + 50)
+	{
+		if(!armDownFound)
+		{
+			if(currentSpeed > 0)
+			{
+				armDownPower--;
+				armDownDecreased = true;
+			}
+			if(currentSpeed < 1)
+			{
+				armDownPower++;
+				if(armDownDecreased)
+				{
+					armDownFound = true;
+				}
+			}
+		}
+		motor[armRight] = motor[armLeft] = -30; //armDownPower;
+	}
+	if(SensorValue[armAngle] < holdAngle - 50)
+	{
+		if(!armUpFound)
+		{
+			if(currentSpeed < 0)
+			{
+				armUpPower++;
+				if(armUpDecreased)
+				{
+					armUpFound = true;
+				}
+			}
+			if(currentSpeed > -1)
+			{
+				armUpPower--;
+				armUpDecreased = true;
+			}
+		}
+		motor[armRight] = motor[armLeft] = 50; //armUpPower;
+	}
+	else
+	{
+		motor[armRight] = motor[armLeft] = 0;
+	}
+}
+
 //controls the movement of the arm
 void moveArm( bool up, bool down, bool autoHoldHeight, int currentSpeed) {
 	if ( up ) {
@@ -293,26 +362,23 @@ void moveArm( bool up, bool down, bool autoHoldHeight, int currentSpeed) {
 		holdAngle = SensorValue[armAngle];
 		armUpPower = 50;
 		armDownPower = -30;
+		armDownDecreased = false;
+		armUpDecreased = false;
+		armDownFound = false;
+		armUpFound = false;
 	}
 	else if ( down ) {
 		motor[armRight] = motor[armLeft] = -ARM_SPEED;
 		holdAngle = SensorValue[armAngle];
 		armUpPower = 50;
 		armDownPower = -30;
+		armDownDecreased = false;
+		armUpDecreased = false;
+		armDownFound = false;
+		armUpFound = false;
 	}
 	else if (autoHoldHeight){
-		if (SensorValue[armAngle] > holdAngle + 75)
-		{
-			motor[armRight] = motor[armLeft] = armDownPower;
-		}
-		if(SensorValue[armAngle] < holdAngle - 75)
-		{
-			motor[armRight] = motor[armLeft] = armUpPower;
-		}
-		else
-		{
-			motor[armRight] = motor[armLeft] = 0;
-		}
+		holdArm(0, currentSpeed);
 	}
 	else{
 		motor[armRight] = motor[armLeft] = 0;
