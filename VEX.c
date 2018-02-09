@@ -103,6 +103,8 @@ bool autoIsRunning;
 bool autoLiftRunning;
 bool autoHoldHeightRunning;
 
+//edit
+
 task usercontrol()
 {
 	const int LIFT_UP_BTN = Btn6U,
