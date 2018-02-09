@@ -124,7 +124,15 @@ task autonomous()
 		{
 			rollRoller(true, false);
 		}
-		if(getMotorEncoder(rightInteriorMotor) < 600 && time1[T1] > 1000)
+		if(time1[T1] > 1000 && time1[T1] < 1750)
+		{
+			motor[leftExteriorMotors] = motor[leftInteriorMotor] =  motor[rightExteriorMotors] = motor[rightInteriorMotor] = -50;
+		}
+		else if(time1[T1] < 2500)
+		{
+			motor[leftExteriorMotors] = motor[leftInteriorMotor] =  motor[rightExteriorMotors] = motor[rightInteriorMotor] = 50;
+		}
+		else if(time1[T1] < 3500)
 		{
 			motor[leftExteriorMotors] = motor[leftInteriorMotor] =  motor[rightExteriorMotors] = motor[rightInteriorMotor] = -50;
 		}
@@ -134,13 +142,13 @@ task autonomous()
 		}
 		if(SensorValue[armAngle] < 1600)
 		{
-			motor[armLeft] = motor[armRight] = 75;
+			motor[armLeft] = motor[armRight] = 100;
 		}
 		else
 		{
 			motor[armLeft] = motor[armRight] = 0;
 		}
-		if(getMotorEncoder(rightInteriorMotor) > 600)
+		if(time1[T1] > 3500)
 		{
 			robotInPosition = true;
 		}
