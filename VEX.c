@@ -100,6 +100,7 @@ void holdArm(int overrideAngle, int currentSpeed);
 task autoPickupGoal();
 task autoDropMobile();
 task autoDropFixed();
+task autoLoadHumanPlayerStation();
 
 //globals
 int GOAL_START_ANGLE;
@@ -226,6 +227,34 @@ task autoPickupGoal() {
 	}
 	motor[goalRight] = motor[goalLeft] = 0;
 	autoIsRunning = false;
+}
+
+//task to automatically pick up cone from human player station
+//sets arm to appropriate height
+//requires robot to start at correct distance and orientation
+task autoLoadHumanPlayerStation()
+{
+	clearTimer(T1);
+	bool coneLoaded = false;
+	int clearHPS;
+	int pickupHeight;
+	while(!coneLoaded)
+	{
+		if(time1[T1] < 1000)
+		{
+			holdArm(clearHPS,0);
+		}
+		else if(time1[T1] < 2000)
+		{
+	 		holdArm(pickupHeight, 0);
+	 		rollRoller(true, false);
+		}
+		else
+		{
+			coneLoaded = true;
+		}
+	}
+	startTask(autoDropMobile);
 }
 
 //raises arm to mobile goal drop point and drops cone
