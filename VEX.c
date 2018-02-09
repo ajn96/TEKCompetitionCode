@@ -89,71 +89,117 @@ task autonomous()
 #define ROLLER_SPEED 60
 #define GOAL_SPEED 100
 
+//function declarations
 void drive( bool isTank );
-void moveArm( bool up, bool down );
+void moveArm(bool up, bool down, bool autoHoldHeight, int currentSpeed);
 void rollRoller( bool up, bool down );
 void moveGoal( bool up, bool down );
+
+//task declarations
 task autoPickupGoal();
 task autoDropMobile();
-task autoHoldHeight();
+task autoDropFixed();
 
+//globals
 int GOAL_START_ANGLE;
 int ARM_CURRENT_ANGLE;
+int holdAngle;
 bool autoIsRunning;
 bool autoLiftRunning;
-bool autoHoldHeightRunning;
 
-//edit
+//globals for PID
+int armUpPower;
+int armDownPower;
+
+//button encoding
+const int LIFT_UP_BTN = Btn6U,
+				  LIFT_DOWN_BTN = Btn6D,
+				  CONE_UP_BTN = Btn8L,
+				  CONE_DOWN_BTN = Btn8D,
+				  GOAL_UP_BTN = Btn8U,
+				  GOAL_DOWN_BTN = Btn8R,
+				  AUTO_LIFT_MOBILE = Btn5U,
+				  AUTO_LIFT_FIXED = Btn5D,
+				  AUTO_HOLD_HEIGHT = Btn7D;
 
 task usercontrol()
 {
-	const int LIFT_UP_BTN = Btn6U,
-					  LIFT_DOWN_BTN = Btn6D,
-					  CONE_UP_BTN = Btn8L,
-					  CONE_DOWN_BTN = Btn8D,
-					  GOAL_UP_BTN = Btn8U,
-					  GOAL_DOWN_BTN = Btn8R,
-					  AUTO_LIFT_MOBILE = Btn5U,
-					  AUTO_LIFT_FIXED = Btn5D,
-					  AUTO_HOLD_HEIGHT = Btn7D;
-
 	GOAL_START_ANGLE = SensorValue[mobileGoalAngle];
 	ARM_CURRENT_ANGLE = SensorValue[armAngle];
 
 	bool isTank = true;
+	bool autoHoldHeight = true;
+
+	int armPositionNew = SensorValue[armAngle];
+	int armPositionOld = armPositionNew;
+	int armRotationalSpeed;
+	int oneSecPoll;
+	int tenMSPoll;
+
 	autoIsRunning = false;
 	autoLiftRunning = false;
-	autoHoldHeightRunning = false;
+
+	//clears timer2
+	clearTimer(T2);
 
 	const int GOAL_OUT_ANGLE = 1030 / 360 * 15;
-	const int ARM_DROP_ANGLE_FIXED = 2220;
-	const int ARM_START_ANGLE = 50;
 
   while ( true ) {
-  	drive( isTank ); // ( isTank )
-  	if(!autoLiftRunning && !autoHoldHeightRunning)
+  	//drive function
+  	drive( isTank );
+
+  	//manual arm control
+  	if(!autoLiftRunning)
   	{
-  		moveArm( vexRT[LIFT_UP_BTN] == 1, vexRT[LIFT_DOWN_BTN] == 1); // ( up, down )
+  		moveArm( vexRT[LIFT_UP_BTN] == 1, vexRT[LIFT_DOWN_BTN] == 1, autoHoldHeight, armRotationalSpeed);
   	}
+
+  	//manual roller control
   	rollRoller( vexRT[CONE_UP_BTN] == 1, vexRT[CONE_DOWN_BTN] == 1 ); // ( up, down )
+
+  	//manual goal control
   	moveGoal( vexRT[GOAL_UP_BTN] == 1, vexRT[GOAL_DOWN_BTN] == 1 ); // ( up, down )
+
   	// Auto Goal Pickup Activation
   	int goalAngle = abs( SensorValue[mobileGoalAngle] - GOAL_START_ANGLE );
   	if ( goalAngle > GOAL_OUT_ANGLE &&
   		SensorValue[hasMobileGoal] == 1 && motor[goalLeft] == 0 ) {
   		startTask( autoPickupGoal );
   	}
+
+  	//Auto Lift and Drop Activation
   	if( vexRT[AUTO_LIFT_MOBILE])
   	{
   		startTask( autoDropMobile );
   	}
-  	if( vexRT[AUTO_HOLD_HEIGHT] )
+
+  	if(vexRT[AUTO_LIFT_FIXED])
   	{
-  		startTask ( autoHoldHeight);
+  		startTask(autoDropFixed);
+  	}
+
+  	//run every second
+  	if(time1[T2] - oneSecPoll > 1000)
+  	{
+  		oneSecPoll = time1[T2];
+  		if(vexRT[AUTO_HOLD_HEIGHT])
+  		{
+  			autoHoldHeight = !autoHoldHeight;
+  		}
+  	}
+
+  	//run every 10ms
+  	if(time1[T2] - tenMSPoll > 10)
+  	{
+  		tenMSPoll = time1[T2];
+  		armPositionOld = armPositionNew;
+  		armPositionNew = SensorValue[armAngle];
+  		armRotationalSpeed = armPositionNew - armPositionOld;
   	}
   }
 }
 
+//automatically picks up goals when limit switch triggered
 task autoPickupGoal() {
   autoIsRunning = true;
 	int distance = abs( SensorValue[mobileGoalAngle] - GOAL_START_ANGLE );
@@ -213,33 +259,13 @@ task autoDropMobile(){
 	autoLiftRunning = false;
 }
 
-task autoHoldHeight()
+//drops a cone on the fixed goal
+task autoDropFixed()
 {
-	const int holdAngle = 900;
-	const int LIFT_UP_BTN = Btn6U,
-	LIFT_DOWN_BTN = Btn6D;
-	autoHoldHeightRunning = true;
-	while(autoHoldHeightRunning)
-	{
-		if( SensorValue[armAngle] > holdAngle + 50 )
-		{
-				motor[armLeft] = motor[armRight] = -30;
-		}
-		else if ( SensorValue[armAngle] < holdAngle -50)
-		{
-				motor[armLeft] = motor[armRight] = 30;
-		}
-		else
-		{
-				motor[armLeft] = motor[armRight] = 0;
-		}
-		if(vexRT(LIFT_DOWN_BTN) || vexRT(LIFT_UP_BTN))
-		{
-			autoHoldHeightRunning = false;
-		}
-	}
 }
 
+//drive code for the robot
+//@param isTank: bool indicating if tank or arcade drive
 void drive( bool isTank ) {
 	if ( isTank ) {
 		int leftSpeed = vexRT[Ch3];
@@ -260,12 +286,35 @@ void drive( bool isTank ) {
   }
 }
 
-void moveArm( bool up, bool down ) {
+//controls the movement of the arm
+void moveArm( bool up, bool down, bool autoHoldHeight, int currentSpeed) {
 	if ( up ) {
 		motor[armRight] = motor[armLeft] = ARM_SPEED;
-	} else if ( down ) {
+		holdAngle = SensorValue[armAngle];
+		armUpPower = 50;
+		armDownPower = -30;
+	}
+	else if ( down ) {
 		motor[armRight] = motor[armLeft] = -ARM_SPEED;
-	} else {
+		holdAngle = SensorValue[armAngle];
+		armUpPower = 50;
+		armDownPower = -30;
+	}
+	else if (autoHoldHeight){
+		if (SensorValue[armAngle] > holdAngle + 75)
+		{
+			motor[armRight] = motor[armLeft] = armDownPower;
+		}
+		if(SensorValue[armAngle] < holdAngle - 75)
+		{
+			motor[armRight] = motor[armLeft] = armUpPower;
+		}
+		else
+		{
+			motor[armRight] = motor[armLeft] = 0;
+		}
+	}
+	else{
 		motor[armRight] = motor[armLeft] = 0;
 	}
 }
